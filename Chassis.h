@@ -3,13 +3,22 @@
 
 #include "Task_Init.h"
 #include <stdbool.h>
+#include "PID_old.h"
+#include "VESC.h"
 
 #define PI 3.14159265359f
 #define MAX_VELOCITY 170.0f	  // 底盘最大速度
 #define MAX_OMEGA PI*10	 	 //最大角速度
-#define LENGTH 0.45f	 	//整车边长的一半
+#define LENGTH 0.457f	 	//整车半径
 #define WHEEL_RADIUS 0.075f  //轮的半径
 #define MODE_t  1		  //等于0为漫反射开关模式，1为摄像头模式
+
+//电机参数
+typedef struct{
+	PID2 PID;
+	VESC_t steering;
+
+}Motor_param;
 
 typedef enum {
      STP,//自动模式下的急停

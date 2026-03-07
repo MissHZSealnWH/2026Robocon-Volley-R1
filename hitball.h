@@ -10,16 +10,6 @@
 #define normal_torque 40.0f
 #define MAX_SIZE 40.0f
 
-#define C_OFFSET_Y   0.0645f     // C在平台坐标中的y
-#define HALF_P       0.1f    // P1-P2 一半
-#define L_OA           0.27f    // O1-A = O2-B
-#define L_AP           0.24f    // A-P1 = B-P2
-
-typedef struct {
-    float x;
-    float y;
-} Vec2;
-
 
 extern TaskHandle_t Volleyball_Serve_Handle;
 typedef struct
