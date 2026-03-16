@@ -3,16 +3,23 @@
 #include "PID_old.h"
 #include "Task_Init.h"
 #include "semphr.h"
+#include "dataFrame.h"
+#include "comm.h"
+#include "comm_stm32_hal_middle.h"
+#include "data_poll.h"
+#include "My_list.h"
 
-
-//PID依次为5，0.0001，30
-
+//遥控器
+PackControl_t recv_pack;
+uint8_t recv_buff[20] = {0};
+float rocker_filter[4] = {0};
+uint8_t usart5_buff[30];
 //电机驱动
 Motor_param motor1 = {
 .PID = {
-	.Kp = 7.0f,
+	.Kp = 0.0f,
 	.Ki = 0.0f,
-	.Kd = 40.0f,
+	.Kd = 0.0f,
 	.limit = 10000.0f,
 	.output_limit = 40.0f,
 },
@@ -23,9 +30,9 @@ Motor_param motor1 = {
 };
 Motor_param motor2 = {
 .PID = {
-	.Kp = 7.0f,
+	.Kp = 0.0f,
 	.Ki = 0.0f,
-	.Kd = 40.0f,
+	.Kd = 0.0f,
 	.limit = 10000.0f,
 	.output_limit = 40.0f,
 },
@@ -36,9 +43,9 @@ Motor_param motor2 = {
 };
 Motor_param motor3 = {
 .PID = {
-	.Kp = 7.0f,
+	.Kp = 0.0f,
 	.Ki = 0.0f,
-	.Kd = 40.0f,
+	.Kd = 0.0f,
 	.limit = 10000.0f,
 	.output_limit = 40.0f,
 },
@@ -56,6 +63,7 @@ Motor_param motor3 = {
 //extern GPIO_PinState GPIOB12_State;
 //extern GPIO_PinState GPIOB13_State;
 extern uint8_t flag;
+
 
 //遥控模式
 Positon_label MODE = REMOTE;
@@ -118,23 +126,48 @@ void Remote(void *pvParameters)
 	}
 }
 
-extern SemaphoreHandle_t remote_semaphore;
+void Rocker_Filter(PackControl_t *data)
+{
+    float alpha = 0.6f;
 
+    for(int i = 0; i < 4; i++)
+    {
+        rocker_filter[i] = alpha * data->rocker[i] +
+                          (1.0f - alpha) * rocker_filter[i];
+
+        data->rocker[i] = rocker_filter[i];
+    }
+}
+
+void MyRecvCallback(uint8_t *src, uint16_t size, void *user_data)
+{
+    memcpy(&recv_buff, src, size);
+    memcpy(&recv_pack, recv_buff, sizeof(recv_pack));
+    Rocker_Filter(&recv_pack);
+}
+
+extern SemaphoreHandle_t remote_semaphore;
+CommPackRecv_Cb  recv_cb = MyRecvCallback;
+
+//遥控任务
 TaskHandle_t Move_Remote_Handle;
 void Move_Remote(void *pvParameters){
 	
 	TickType_t last_wake_time = xTaskGetTickCount();
+    g_comm_handle = Comm_Init(&huart5);
+    RemoteCommInit(NULL);
+    register_comm_recv_cb(recv_cb, 0x01, &recv_pack);
     for(;;)
     {
-        if(xSemaphoreTake(remote_semaphore, pdMS_TO_TICKS(200)) == pdTRUE)
+      if(xSemaphoreTake(remote_semaphore, pdMS_TO_TICKS(200)) == pdTRUE)
         {
-            memcpy(&RemoteData, usart4_dma_buff, sizeof(RemoteData));
+            memcpy(&recv_pack, usart5_buff, sizeof(PackControl_t));
             Updatekey(&Remote_Control);
-            Remote_Control.Ex =-RemoteData.rocker[1];
-            Remote_Control.Ey = RemoteData.rocker[0];
-            Remote_Control.Eomega = RemoteData.rocker[2];
-            Remote_Control.mode = RemoteData.rocker[3];
-            Remote_Control.Key_Control = &RemoteData.Key;
+            Remote_Control.Ex =-recv_pack.rocker[1];
+            Remote_Control.Ey = recv_pack.rocker[0];
+            Remote_Control.Eomega = recv_pack.rocker[2];
+            Remote_Control.mode = recv_pack.rocker[3];
+            Remote_Control.Key_Control = (hw_key_t*)&recv_pack.Key;
         }
 				else
 				{
@@ -143,8 +176,8 @@ void Move_Remote(void *pvParameters){
             Remote_Control.Eomega = 0;
             Remote_Control.mode = 0;
             //按键状态清零
-            memset(&RemoteData.Key, 0, sizeof(hw_key_t));
-            Remote_Control.Key_Control = &RemoteData.Key;
+            memset(&recv_pack.Key, 0, sizeof(hw_key_t));
+            Remote_Control.Key_Control = (hw_key_t*)&recv_pack.Key;
         }
 
      if(MODE == REMOTE)
@@ -170,4 +203,47 @@ void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef *hcan)
 	VESC_ReceiveHandler(&motor1.steering, &hcan2, ID,Recv);
 	VESC_ReceiveHandler(&motor2.steering, &hcan2, ID,Recv);
 	VESC_ReceiveHandler(&motor3.steering, &hcan2, ID,Recv);
+}
+
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size)
+{
+	if (huart->Instance == UART5)
+	{
+		HAL_UART_DMAStop(&huart5);
+		Comm_UART_IRQ_Handle(g_comm_handle, &huart5, usart5_buff,size);
+		HAL_UARTEx_ReceiveToIdle_DMA(&huart5, usart5_buff,sizeof(usart5_buff));
+   		__HAL_DMA_DISABLE_IT(huart5.hdmarx, DMA_IT_HT);
+	}
+}
+
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == UART5)
+    {
+        HAL_UART_DMAStop(huart);
+        // 重置HAL状态
+        huart->ErrorCode = HAL_UART_ERROR_NONE;
+        huart->RxState = HAL_UART_STATE_READY;
+        huart->gState = HAL_UART_STATE_READY;
+        
+        // 然后清除错误标志 - 按照STM32F4参考手册要求的顺序
+        uint32_t isrflags = READ_REG(huart->Instance->SR);
+        
+        // 按顺序处理各种错误标志，必须先读SR再读DR来清除错误
+        if (isrflags & (USART_SR_ORE | USART_SR_NE | USART_SR_FE)) 
+        {
+            // 对于ORE、NE、FE错误，需要先读SR再读DR
+            volatile uint32_t temp_sr = READ_REG(huart->Instance->SR);
+            volatile uint32_t temp_dr = READ_REG(huart->Instance->DR); // 这个读取会清除ORE、NE、FE        
+
+        if (isrflags & USART_SR_PE)
+        {
+            volatile uint32_t temp_sr = READ_REG(huart->Instance->SR);
+        }
+        
+    }
+      Comm_UART_IRQ_Handle(g_comm_handle, &huart5, usart5_buff, 0);
+      HAL_UARTEx_ReceiveToIdle_DMA(&huart5, usart5_buff,sizeof(usart5_buff));
+      __HAL_DMA_DISABLE_IT(huart5.hdmarx, DMA_IT_HT);
+    }
 }
