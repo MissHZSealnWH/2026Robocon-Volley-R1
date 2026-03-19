@@ -44,11 +44,6 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-//  PackControl_t recv_pack;
-//	uint8_t usart5_buff[30];
-//	uint8_t recv_buff[20] = {0};
-//  float rocker_filter[4] = {0};
-
 
 	extern uint8_t usart5_buff[30];
   extern PackControl_t recv_pack;
@@ -375,17 +370,7 @@ void UART4_IRQHandler(void)
 void UART5_IRQHandler(void)
 {
   /* USER CODE BEGIN UART5_IRQn 0 */
-if(__HAL_UART_GET_FLAG(&huart5, UART_FLAG_IDLE) && __HAL_UART_GET_IT_SOURCE(&huart5, UART_IT_IDLE)) 
-{
-  HAL_UART_DMAStop(&huart5);
-  if(usart5_buff[0] == 0xAA && usart5_buff[11] == 0xBB)
-  {
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    xSemaphoreGiveFromISR(remote_semaphore, &xHigherPriorityTaskWoken);
-    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-  }
-  HAL_UART_Receive_DMA(&huart5, usart5_buff, sizeof(usart5_buff));
-}
+
   /* USER CODE END UART5_IRQn 0 */
   HAL_UART_IRQHandler(&huart5);
   /* USER CODE BEGIN UART5_IRQn 1 */
