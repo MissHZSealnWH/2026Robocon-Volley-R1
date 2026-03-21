@@ -1,6 +1,6 @@
 #include "Chassis.h"
 #include "VESC.h"
-#include "PID.h"
+#include "PID_old.h"
 #include "Task_Init.h"
 #include "semphr.h"
 #include "dataFrame.h"
@@ -8,8 +8,7 @@
 #include "comm_stm32_hal_middle.h"
 #include "data_poll.h"
 #include "My_list.h"
-
-extern SemaphoreHandle_t remote_semaphore;
+#include "math.h"
 
 //遥控器
 PackControl_t recv_pack;
@@ -17,15 +16,15 @@ uint8_t recv_buff[20] = {0};
 float rocker_filter[4] = {0};
 uint8_t usart5_buff[30];
 
+
 //电机驱动
 Motor_param motor1 = {
-.deadband = 5,
 .PID = {
-	.kp = 5.0f,
-	.ki = 0.0f,
-	.kd = 30.0f,
-	.max_iout = 10000.0f,
-	.max_out = 40.0f,
+	.Kp = 5.0f,
+	.Ki = 0.0f,
+	.Kd = 30.0f,
+	.limit = 10000.0f,
+	.output_limit = 40.0f,
 },
 .steering={
 	.motor_id=0x01,
@@ -33,13 +32,12 @@ Motor_param motor1 = {
 }
 };
 Motor_param motor2 = {
-.deadband = 5,
 .PID = {
-	.kp = 5.0f,
-	.ki = 0.0f,
-	.kd = 30.0f,
-	.max_iout = 10000.0f,
-	.max_out = 40.0f,
+	.Kp = 5.0f,
+	.Ki = 0.0f,
+	.Kd = 30.0f,
+	.limit = 10000.0f,
+	.output_limit = 40.0f,
 },
 .steering={
 	.motor_id=0x02,
@@ -47,13 +45,12 @@ Motor_param motor2 = {
 }
 };
 Motor_param motor3 = {
-.deadband = 5,
 .PID = {
-	.kp = 5.0f,
-	.ki = 0.0f,
-	.kd = 30.0f,
-	.max_iout = 10000.0f,
-	.max_out = 40.0f,
+	.Kp = 5.0f,
+	.Ki = 0.0f,
+	.Kd = 30.0f,
+	.limit = 10000.0f,
+	.output_limit = 40.0f,
 },
 .steering={
 	.motor_id=0x03,
@@ -73,11 +70,10 @@ extern uint8_t flag;
 //遥控模式
 Positon_label MODE = REMOTE;
 
-float Vx =0;   //前后移动
-float Vy =0;   //左右移动
-float Wz =0;   //顺逆自转
+volatile float Vx =0;   //前后移动
+volatile float Vy =0;   //左右移动
+volatile float Wz =0;   //顺逆自转
 
-//该变量的值可能会被程序外的因素（如硬件、其他线程）修改
 volatile float v1 = 0.0f;
 volatile float v2 = 0.0f;
 volatile float v3 = 0.0f;
@@ -86,54 +82,43 @@ volatile float wheel_one = 0.0f;
 volatile float wheel_two = 0.0f;
 volatile float wheel_three=0.0f;
 
-TaskHandle_t Remote_Handle;
-void Remote(void *pvParameters)
-{
-	TickType_t last_wake_time = xTaskGetTickCount();
-	
 
-	PID_EREOR_Init(&motor1.PID, motor1.PID.kp, motor1.PID.ki, motor1.PID.kd, motor1.PID.max_out, motor1.PID.max_iout, motor1.deadband, 0.3f);
-	PID_EREOR_Init(&motor2.PID, motor2.PID.kp, motor2.PID.ki, motor2.PID.kd, motor2.PID.max_out, motor2.PID.max_iout, motor2.deadband, 0.3f);
-	PID_EREOR_Init(&motor3.PID, motor3.PID.kp, motor3.PID.ki, motor3.PID.kd, motor3.PID.max_out, motor3.PID.max_iout, motor3.deadband, 0.3f);
-	for(;;)
-	{
-		if(MODE == REMOTE)
-		{			
-			
-			v1 = -Vy*0.5f+Vx*(sqrt(3.0f)/2.0) + R * Wz;
-			v2 = -Vy*0.5f-Vx*(sqrt(3.0f)/2.0) + R * Wz;
-			v3 = Vy + R * Wz;			
-			
-			wheel_one=  -((v1 / (2.0f * PI * WHEEL_RADIUS)) * 60.0f);
-			wheel_two = (( v2 / (2.0f * PI * WHEEL_RADIUS)) * 60.0f);
-			wheel_three=-((v3 / (2.0f * PI * WHEEL_RADIUS)) * 60.0f);
-			
-//			PID_Control2((float)(motor1.steering.epm / 7.0f/(3.4f)), wheel_one, &motor1.PID);
-//			PID_Control2((float)(motor2.steering.epm / 7.0f/(3.4f)), wheel_two, &motor2.PID);
-//			PID_Control2((float)(motor3.steering.epm / 7.0f/(3.4f)), wheel_three,&motor3.PID);
-      PID_EREOR_Calculate(&motor1.PID, wheel_one - (float)(motor1.steering.epm / 7.0f/(3.4f)));
-			PID_EREOR_Calculate(&motor2.PID, wheel_one - (float)(motor2.steering.epm / 7.0f/(3.4f)));
-			PID_EREOR_Calculate(&motor3.PID, wheel_one - (float)(motor3.steering.epm / 7.0f/(3.4f)));
-			
-			vTaskDelay(1);
-      VESC_SetCurrent(&motor1.steering, motor1.PID.output);
-      VESC_SetCurrent(&motor2.steering, motor2.PID.output);
-	    VESC_SetCurrent(&motor3.steering, motor3.PID.output);  
- 
-		}
-		if(MODE == STP || MODE == STOP )
-		{
-			wheel_one = 0;
-			wheel_two = 0;
-			wheel_three=0;
-			
-			VESC_SetCurrent(&motor1.steering, 0);
-			VESC_SetCurrent(&motor2.steering, 0);
-			VESC_SetCurrent(&motor3.steering, 0);
-		}
-		vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(2));
-	}
+static void Key_Parse(uint32_t key, hw_key_t *out)
+{
+  	out->Right_Switch_Up     = (key & KEY_Right_Switch_Up)     ? 1 : 0;
+    out->Right_Switch_Down   = (key & KEY_Right_Switch_Down)   ? 1 : 0;
+
+    out->Right_Key_Up        = (key & KEY_Right_Key_Up)        ? 1 : 0;
+    out->Right_Key_Down      = (key & KEY_Right_Key_Down)      ? 1 : 0;
+    out->Right_Key_Left      = (key & KEY_Right_Key_Left)      ? 1 : 0;
+    out->Right_Key_Right     = (key & KEY_Right_Key_Right)     ? 1 : 0;
+
+    out->Right_Broadside_Key = (key & KEY_Right_Broadside_Key) ? 1 : 0;
+
+    out->Left_Switch_Up      = (key & KEY_Left_Switch_Up)      ? 1 : 0;
+    out->Left_Switch_Down    = (key & KEY_Left_Switch_Down)    ? 1 : 0;
+
+    out->Left_Key_Up         = (key & KEY_Left_Key_Up)         ? 1 : 0;
+    out->Left_Key_Down       = (key & KEY_Left_Key_Down)       ? 1 : 0;
+    out->Left_Key_Left       = (key & KEY_Left_Key_Left)       ? 1 : 0;
+    out->Left_Key_Right      = (key & KEY_Left_Key_Right)      ? 1 : 0;
+
+    out->Left_Broadside_Key  = (key & KEY_Left_Broadside_Key)  ? 1 : 0;
 }
+
+void Remote_Analysis()
+{
+	/* 1. 保存上一帧 */
+	Remote_Control.Second = Remote_Control.First;
+	/* 2. 解析当前按键 */
+	Key_Parse(recv_pack.Key, &Remote_Control.First);
+	
+	Remote_Control.Ex = recv_pack.rocker[1] / 1847.0f *MAX_ROBOT_VEL;
+	Remote_Control.Ey = recv_pack.rocker[0] / 1798.0f *MAX_ROBOT_VEL;
+	Remote_Control.Eomega = recv_pack.rocker[2] / 1847.0f * MAX_ROBOT_OMEGA;
+}
+
+
 //遥控器滤波降噪 
 void Rocker_Filter(PackControl_t *data)
 {
@@ -196,81 +181,91 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
     }
 }
 
+
 CommPackRecv_Cb recv_cb = MyRecvCallback;
-//遥控任务
-TaskHandle_t Move_Remote_Handle;
 
-static bool remote_force_mode = false;
-static portTickType remote_last_active_tick = 0;
-
-#ifndef REMOTE_RELEASE_TIMEOUT_MS
-#define REMOTE_RELEASE_TIMEOUT_MS 200
-#endif
-static const portTickType REMOTE_RELEASE_TIMEOUT = pdMS_TO_TICKS(REMOTE_RELEASE_TIMEOUT_MS);//从const不改
-
-void Move_Remote(void *pvParameters){
-	
+TaskHandle_t Remote_Handle;
+void Remote(void *pvParameters)
+{
 	TickType_t last_wake_time = xTaskGetTickCount();
 	
     g_comm_handle = Comm_Init(&huart5);
     RemoteCommInit(NULL);
     register_comm_recv_cb(recv_cb, 0x01, &recv_pack);
-
-	remote_force_mode = false;
-  remote_last_active_tick = xTaskGetTickCount();
-	
-    for(;;)
-    {
-				Updatekey(&Remote_Control);
+	for(;;)
+	{
+		if(MODE == REMOTE)
+		{			
+	  		Remote_Analysis();
+				Vx = Remote_Control.Ex;
+				Vy = -Remote_Control.Ey;
+		    Wz = Remote_Control.Eomega;
 			
-	    	portTickType now = xTaskGetTickCount();
-			 
-        if (is_remote_active()) {
-            remote_force_mode = true;
-            remote_last_active_tick = now;
-        }
-        if (remote_force_mode) 
-				{
-					
-            if ((now - remote_last_active_tick) > REMOTE_RELEASE_TIMEOUT) {
-                remote_force_mode = false;
-            }
-        }
-				if (remote_force_mode)
-				{
-				MODE = REMOTE;
-			  	}
-				else
-				{
-				Remote_Control.Ex = 0;
+			v1 = -Vy*0.5f+Vx*(sqrt(3.0f)/2.0) + R * Wz;
+			v2 = -Vy*0.5f-Vx*(sqrt(3.0f)/2.0) + R * Wz;
+			v3 = Vy + R * Wz;			
+			
+			wheel_one=  -((v1 / (2.0f * PI * WHEEL_RADIUS)) * 60.0f);
+			wheel_two = (( v2 / (2.0f * PI * WHEEL_RADIUS)) * 60.0f);
+			wheel_three=-((v3 / (2.0f * PI * WHEEL_RADIUS)) * 60.0f);
+			
+			PID_Control2((float)(motor1.steering.epm / 7.0f/(3.4f)), wheel_one, &motor1.PID);
+			PID_Control2((float)(motor2.steering.epm / 7.0f/(3.4f)), wheel_two, &motor2.PID);
+			PID_Control2((float)(motor3.steering.epm / 7.0f/(3.4f)), wheel_three,&motor3.PID);
+
+			vTaskDelay(1);
+      VESC_SetCurrent(&motor1.steering, motor1.PID.pid_out);
+      VESC_SetCurrent(&motor2.steering, motor2.PID.pid_out);
+	    VESC_SetCurrent(&motor3.steering, motor3.PID.pid_out);  
+			
+			if(recv_pack.rocker[0] == 0 || recv_pack.rocker[1] == 0 ||recv_pack.rocker[2] == 0 )
+			{
+        Remote_Control.Ex = 0;
 				Remote_Control.Ey = 0;
 				Remote_Control.Eomega = 0;
-				Remote_Control.mode = 0;
 
 				//按键状态清零
 				memset(&recv_pack.Key, 0, sizeof(uint32_t));
-				}
-
-				if(MODE == REMOTE)
-      {
-				Remote_Control.Ex =-recv_pack.rocker[1];
-				Remote_Control.Ey = recv_pack.rocker[0];
-				Remote_Control.Eomega = recv_pack.rocker[2];
-				Remote_Control.mode = recv_pack.rocker[3];
-				Remote_Control.Key_Control = (hw_key_t*)&recv_pack.Key;
-			  //遥控映射
-				Vx = -(Remote_Control.Ex / 1847.0f) * MAX_VELOCITY;
-				Vy = -(Remote_Control.Ey / 1798.0f) * MAX_VELOCITY;
-				Wz = (Remote_Control.Eomega / 1847.0f) * MAX_OMEGA;
-//			//进行击球动作（flag转到hitball.c）
-//			if(Remote_Control.First.Right_Key_Up== 1 && Remote_Control.Second.Right_Key_Up == 0)
-//		  	{
-//		  		flag = 1;
-//			  }
-      }
-		vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(1));
-    }
+		 	}
+  
+		}
+		if(MODE == STP || MODE == STOP )
+		{
+			wheel_one = 0;
+			wheel_two = 0;
+			wheel_three=0;
+			
+			VESC_SetCurrent(&motor1.steering, 0);
+			VESC_SetCurrent(&motor2.steering, 0);
+			VESC_SetCurrent(&motor3.steering, 0);
+		}
+		vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(2));
+	}
 }
+
+
+////遥控任务
+//TaskHandle_t Move_Remote_Handle;
+//void Move_Remote(void *pvParameters){
+//	
+//	TickType_t last_wake_time = xTaskGetTickCount();
+//	
+
+//	
+//    for(;;)
+//    {
+
+//				
+//				if(MODE == REMOTE)
+//      {
+
+
+//      }
+//			
+
+//		vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(2));
+//    }
+//}
 
 void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
