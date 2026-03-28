@@ -5,8 +5,8 @@
 #include "CANDrive.h"
 #include "hitball.h"
 
-extern uint8_t usart5_buff[30];
 
+extern uint8_t usart5_buff[30];
 void Task_Init(){
 	
 	 //Ò£¿ØÆ÷
@@ -23,12 +23,12 @@ void Task_Init(){
           3,
           &Remote_Handle); 
 	
-	xTaskCreate(Remote_JY61,
-         "Remote_JY61",
-          256,
+	xTaskCreate(Move_Remote,
+         "Move_Remote",
+          400,
           NULL,
           3,
-          &Remote_JY61_Handle);
+          &Move_Remote_Handle);
 					
 //	xTaskCreate(Volleyball_Serve,
 //         "hit_ball",
