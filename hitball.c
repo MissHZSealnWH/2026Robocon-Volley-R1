@@ -17,7 +17,7 @@ GPIO_PinState GPIOC9_State = GPIO_PIN_SET;
 //GPIO_PinState GPIOB12_State = GPIO_PIN_SET;
 //GPIO_PinState GPIOB13_State = GPIO_PIN_SET;
 
-GPIO_PinState key1, key2, key3;
+GPIO_PinState key1, key2, key3, key4;
 
 uint8_t hit_ball_trigger = 0;
 uint8_t flag = 0;
@@ -32,7 +32,8 @@ void Volleyball_Serve(void *pvParameters)
 		key1 = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_11);
 		key2 = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_12);
 		key3 = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_13);
-		if(key1 == GPIO_PIN_SET || key2 == GPIO_PIN_SET || key3 == GPIO_PIN_SET)
+		key4 = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_10);
+		if(key1 == GPIO_PIN_SET || key2 == GPIO_PIN_SET || key3 == GPIO_PIN_SET || key4 == GPIO_PIN_SET)
 			{
 			flag = 1;	//这里做自动发球，手动发球方式暂存（chassis.c）
 			if(flag == 1)
@@ -42,18 +43,18 @@ void Volleyball_Serve(void *pvParameters)
 	    }
 		 if(hit_ball_trigger == 1)
 			{
-//此为测试使用
-			  	HAL_GPIO_WritePin(GPIOA,GPIO_PIN_8,GPIOA8_State);
-			  	HAL_GPIO_WritePin(GPIOC,GPIO_PIN_9,GPIOC9_State);
-				//
-//			    //启动电磁阀门进行击球				
-//					HAL_GPIO_WritePin(GPIOA,GPIO_PIN_8,GPIO_PIN_SET);
-//					HAL_GPIO_WritePin(GPIOC,GPIO_PIN_9,GPIO_PIN_SET);
-//					vTaskDelay(500);
-//					HAL_GPIO_WritePin(GPIOA,GPIO_PIN_8,GPIO_PIN_RESET);
-//					HAL_GPIO_WritePin(GPIOC,GPIO_PIN_9,GPIO_PIN_RESET);
-//					hit_ball_trigger = 0;
-//					flag = 2;
+////此为测试使用
+//			  	HAL_GPIO_WritePin(GPIOA,GPIO_PIN_8,GPIOA8_State);
+//			  	HAL_GPIO_WritePin(GPIOC,GPIO_PIN_9,GPIOC9_State);
+				
+			    //启动电磁阀门进行击球				
+					HAL_GPIO_WritePin(GPIOA,GPIO_PIN_8,GPIO_PIN_SET);
+					HAL_GPIO_WritePin(GPIOC,GPIO_PIN_9,GPIO_PIN_SET);
+					vTaskDelay(900);
+					HAL_GPIO_WritePin(GPIOA,GPIO_PIN_8,GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOC,GPIO_PIN_9,GPIO_PIN_RESET);
+					hit_ball_trigger = 0;
+					flag = 2;
 			}
 			vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(2));
 		 }
