@@ -11,10 +11,7 @@
 #define MAX_ROBOT_OMEGA PI	 	 //最大角速度
 #define R 0.457f	 	//整车半径
 #define WHEEL_RADIUS 0.075f  //轮的半径
-#define MAX_Acc 0.35f
-#define MAX_limit 2.5f
-#define Deadzone_X 0.05f
-#define Deadzone_Z 0.05f
+#define Deadzone_Z 0.157f
 
 //电机参数
 typedef struct{
@@ -33,13 +30,14 @@ typedef enum {
 //任务
 extern TaskHandle_t Remote_JY61_Handle;
 extern TaskHandle_t Remote_Handle;
-
+extern TaskHandle_t Remote_Go_Handle;
 //模式
 extern Positon_label MODE;
 
 //任务函数
 void Remote(void *pvParameters);
 void Remote_JY61(void *pvParameters);
+void Remote_Go(void *pvParameters);
 
 void Remote_Analysis();
 

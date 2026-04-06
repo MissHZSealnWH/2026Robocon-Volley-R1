@@ -17,7 +17,7 @@ extern SemaphoreHandle_t remote_semaphore;
 
 //陀螺仪姿态矫正
 PID2 JY61_adjust = {
-	.Kp = 0.6f,
+	.Kp = 0.8f,
 	.Ki = 0.0f,
 	.Kd = 0.1f,
 	.limit = 10000.0f,
@@ -37,7 +37,7 @@ Motor_param motor1 = {
 .PID = {
 	.Kp = 0.3f,
 	.Ki = 0.0005f,
-	.Kd = 1.0f,
+	.Kd = 1.5f,
 	.limit = 10000.0f,
 	.output_limit = 40.0f,
 },
@@ -50,7 +50,7 @@ Motor_param motor2 = {
 .PID = {
 	.Kp = 0.3f,
 	.Ki = 0.0005f,
-	.Kd = 1.0f,
+	.Kd = 1.5f,
 	.limit = 10000.0f,
 	.output_limit = 40.0f,
 },
@@ -63,7 +63,7 @@ Motor_param motor3 = {
 .PID = {
 	.Kp = 0.3f,
 	.Ki = 0.0005f,
-	.Kd = 1.0f,
+	.Kd = 1.5f,
 	.limit = 10000.0f,
 	.output_limit = 40.0f,
 },
@@ -122,37 +122,39 @@ static void Key_Parse(uint32_t key, hw_key_t *out)
 }
 
 static float lock_Yaw = 0.0f;
-void Remote_Analysis()
-{
-    if(xSemaphoreTake(remote_semaphore, pdMS_TO_TICKS(200)) == pdTRUE)
-    {
-      /* 1. 保存上一帧 */
-      Remote_Control.Second = Remote_Control.First;
-      /* 2. 解析当前按键 */
-      Key_Parse(recv_pack.Key, &Remote_Control.First);
-
-			Remote_Control.Ex = recv_pack.rocker[1] / 1977.0f *MAX_ROBOT_VEL;
-			Remote_Control.Ey = recv_pack.rocker[0] / 1798.0f *MAX_ROBOT_VEL;
-			Remote_Control.Eomega = recv_pack.rocker[2] / 1847.0f * MAX_ROBOT_OMEGA;
-    }else {
-	    Remote_Control.Ex = 0;
-      Remote_Control.Ey = 0;
-      Remote_Control.Eomega = 0;
-			
-      memset(&Remote_Control.First, 0, sizeof(Remote_Control.First));
-    }
-}
 //void Remote_Analysis()
 //{
-//	/* 1. 保存上一帧 */
-//	Remote_Control.Second = Remote_Control.First;
-//	/* 2. 解析当前按键 */
-//	Key_Parse(recv_pack.Key, &Remote_Control.First);
-//	
+//    if(xSemaphoreTake(remote_semaphore, pdMS_TO_TICKS(200)) == pdTRUE)
+//    {
+//      /* 1. 保存上一帧 */
+//      Remote_Control.Second = Remote_Control.First;
+//      /* 2. 解析当前按键 */
+//      Key_Parse(recv_pack.Key, &Remote_Control.First);
+//			Remote_Control.Ex = recv_pack.rocker[1] / 1977.0f *MAX_ROBOT_VEL;
+//			Remote_Control.Ey = recv_pack.rocker[0] / 1798.0f *MAX_ROBOT_VEL;
+//			Remote_Control.Eomega = recv_pack.rocker[2] / 1847.0f * MAX_ROBOT_OMEGA;
+//    }else {
+//	    Remote_Control.Ex = 0;
+//      Remote_Control.Ey = 0;
+//      Remote_Control.Eomega = 0;
+//			
+//      memset(&Remote_Control.First, 0, sizeof(Remote_Control.First));
+//    }
+//}
+void Remote_Analysis()
+{
+	/* 1. 保存上一帧 */
+	Remote_Control.Second = Remote_Control.First;
+	/* 2. 解析当前按键 */
+	Key_Parse(recv_pack.Key, &Remote_Control.First);
+	
 //	Remote_Control.Ex = recv_pack.rocker[1] / 1977.0f *MAX_ROBOT_VEL;
 //	Remote_Control.Ey = recv_pack.rocker[0] / 1798.0f *MAX_ROBOT_VEL;
 //	Remote_Control.Eomega = recv_pack.rocker[2] / 1847.0f * MAX_ROBOT_OMEGA;
-//}
+	Remote_Control.Ex = recv_pack.rocker[1] / 1647.0f *MAX_ROBOT_VEL;
+	Remote_Control.Ey = recv_pack.rocker[0] / 1647.0f *MAX_ROBOT_VEL;
+	Remote_Control.Eomega = recv_pack.rocker[2] / 1647.0f * MAX_ROBOT_OMEGA;
+}
 
 
 //遥控器滤波降噪 
@@ -178,7 +180,6 @@ void MyRecvCallback(uint8_t *src, uint16_t size, void *user_data)
     xSemaphoreGiveFromISR(remote_semaphore, &xHigherPriorityTaskWoken);
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
-
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size)
 {
 	if (huart->Instance == UART5)
@@ -251,20 +252,20 @@ float Wz_cmd = Remote_Control.Eomega;
 			float dVy = (Vy - Vy_last) / dt;
 			Vy_last = Vy;
 
-			//Vy限幅
-			if (dVy > 2.0f)  {dVy = 2.0f;}
-			if (dVy < -2.0f) {dVy = -2.0f;}
+			//Vy限幅（根据最大速度4/dt）
+			if (dVy > 2000.0f)  {dVy = 2000.0f;}
+			if (dVy < -2000.0f) {dVy = -2000.0f;}
 
 			//最终滤波
 			dVy_f = 0.7f * dVy_f + 0.3f * dVy;
 
-			if (fabs(dVy_f) > 5.0f)
+			if (fabs(dVy_f) > 10.0f)
 			{
 					Wz_ff = -0.02f * dVy_f;
 			}
 			//前馈Wz限幅
-			if (Wz_ff > 0.4f)  {Wz_ff = 0.4f;}
-			if (Wz_ff < -0.4f) {Wz_ff = -0.4f;}
+			if (Wz_ff > 0.314f)  {Wz_ff = 0.314f;}
+			if (Wz_ff < -0.314f) {Wz_ff = -0.314f;}
 			//矫正判断
 			if (fabs(Wz_cmd) >= Deadzone_Z)
 			{
@@ -273,7 +274,7 @@ float Wz_cmd = Remote_Control.Eomega;
 			else
 			{
 				float k = fabs(Vy) / (fabs(Vx) + fabs(Vy) + 0.001f);
-				Wz = Wz_cmd + k * Wz_correction + Wz_ff;
+				Wz = Wz_cmd + k * Wz_correction;
 			}
 			
 			v1 = -Vy*0.5f+Vx*(sqrtf(3.0f)/2.0f) + R * Wz;
@@ -296,16 +297,16 @@ float Wz_cmd = Remote_Control.Eomega;
 			{
 				flag_two = 1;
 			}
-//		if(recv_pack.rocker[0] == 0 && recv_pack.rocker[1] == 0 && recv_pack.rocker[2] == 0 )
-////				if(abs(recv_pack.rocker[3]>1500))第二判断法
-//			{
-//	    Remote_Control.Ex = 0;
-//      Remote_Control.Ey = 0;
-//      Remote_Control.Eomega = 0;
-//			
-//      memset(&Remote_Control.First, 0, sizeof(Remote_Control.First));
-//			
-//		 	}
+		if(recv_pack.rocker[0] == 0 && recv_pack.rocker[1] == 0 && recv_pack.rocker[2] == 0 )
+//				if(abs(recv_pack.rocker[3]>1500))第二判断法
+			{
+	    Remote_Control.Ex = 0;
+      Remote_Control.Ey = 0;
+      Remote_Control.Eomega = 0;
+			
+      memset(&Remote_Control.First, 0, sizeof(Remote_Control.First));
+			
+		 	}
 		}
 		if(MODE == STP || MODE == STOP )
 		{
@@ -334,17 +335,18 @@ void Remote_JY61(void *pvParameters){
 	
    gyro_z_filter = 0.7f * gyro_z_filter + 0.3f * gyro_z;
    gyro_z = gyro_z_filter;
-		if (fabs(gyro_z) < 0.5f)
+		
+		if (fabs(gyro_z) < 0.3f)
 		{
 				gyro_z = 0;
 		}
   
-		PID_Control2(gyro_z, 0.0f, &JY61_adjust);
+		PID_Control2(-gyro_z, 0.0f, &JY61_adjust);
 
 		float out = JY61_adjust.pid_out;
 
-		if (out > 1.0f)  {out = 1.0f;}
-		if (out < -1.0f) {out = -1.0f;}
+		if (out > 1.5f)  {out = 1.5f;}
+		if (out < -1.5f) {out = -1.5f;}
 		
 		if (fabs(out) < 0.05f)//防抖
 		{
@@ -352,14 +354,25 @@ void Remote_JY61(void *pvParameters){
 		}
 		//滤波
 		static float wz_f = 0;
-		wz_f = 0.5f * wz_f + 0.5f * out;
+		wz_f = 0.6f * wz_f + 0.4f * out;
 
-		Wz_correction = wz_f;
+		Wz_correction = wz_f;//转至Remote
 
 	 vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(2));
 	 }
 }
 
+TaskHandle_t Remote_Go_Handle;
+void Remote_Go(void *pvParameters){
+	  TickType_t last_wake_time = xTaskGetTickCount();
+	
+   for(;;)
+	{
+		Remote_Analysis();
+
+	 vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(2));
+	 }
+}
 void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
 	uint8_t Recv[8] = {0};
