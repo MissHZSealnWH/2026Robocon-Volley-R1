@@ -14,7 +14,6 @@
 extern SemaphoreHandle_t Jy61_semaphore;
 extern SemaphoreHandle_t remote_semaphore;
 
-
 //陀螺仪姿态矫正
 PID2 JY61_adjust = {
 	.Kp = 0.8f,
@@ -122,39 +121,39 @@ static void Key_Parse(uint32_t key, hw_key_t *out)
 }
 
 static float lock_Yaw = 0.0f;
-//void Remote_Analysis()
-//{
-//    if(xSemaphoreTake(remote_semaphore, pdMS_TO_TICKS(200)) == pdTRUE)
-//    {
-//      /* 1. 保存上一帧 */
-//      Remote_Control.Second = Remote_Control.First;
-//      /* 2. 解析当前按键 */
-//      Key_Parse(recv_pack.Key, &Remote_Control.First);
-//			Remote_Control.Ex = recv_pack.rocker[1] / 1977.0f *MAX_ROBOT_VEL;
-//			Remote_Control.Ey = recv_pack.rocker[0] / 1798.0f *MAX_ROBOT_VEL;
-//			Remote_Control.Eomega = recv_pack.rocker[2] / 1847.0f * MAX_ROBOT_OMEGA;
-//    }else {
-//	    Remote_Control.Ex = 0;
-//      Remote_Control.Ey = 0;
-//      Remote_Control.Eomega = 0;
-//			
-//      memset(&Remote_Control.First, 0, sizeof(Remote_Control.First));
-//    }
-//}
 void Remote_Analysis()
 {
-	/* 1. 保存上一帧 */
-	Remote_Control.Second = Remote_Control.First;
-	/* 2. 解析当前按键 */
-	Key_Parse(recv_pack.Key, &Remote_Control.First);
-	
-//	Remote_Control.Ex = recv_pack.rocker[1] / 1977.0f *MAX_ROBOT_VEL;
-//	Remote_Control.Ey = recv_pack.rocker[0] / 1798.0f *MAX_ROBOT_VEL;
-//	Remote_Control.Eomega = recv_pack.rocker[2] / 1847.0f * MAX_ROBOT_OMEGA;
-	Remote_Control.Ex = recv_pack.rocker[1] / 1647.0f *MAX_ROBOT_VEL;
-	Remote_Control.Ey = recv_pack.rocker[0] / 1647.0f *MAX_ROBOT_VEL;
-	Remote_Control.Eomega = recv_pack.rocker[2] / 1647.0f * MAX_ROBOT_OMEGA;
+    if(xSemaphoreTake(remote_semaphore, pdMS_TO_TICKS(200)) == pdTRUE)
+    {
+      /* 1. 保存上一帧 */
+      Remote_Control.Second = Remote_Control.First;
+      /* 2. 解析当前按键 */
+      Key_Parse(recv_pack.Key, &Remote_Control.First);
+			Remote_Control.Ex = recv_pack.rocker[1] / 1647.0f *MAX_ROBOT_VEL;
+			Remote_Control.Ey = recv_pack.rocker[0] / 1648.0f *MAX_ROBOT_VEL;
+			Remote_Control.Eomega = recv_pack.rocker[2] / 1647.0f * MAX_ROBOT_OMEGA;
+    }else {
+	    Remote_Control.Ex = 0;
+      Remote_Control.Ey = 0;
+      Remote_Control.Eomega = 0;
+			
+      memset(&Remote_Control.First, 0, sizeof(Remote_Control.First));
+    }
 }
+//void Remote_Analysis()
+//{
+//	/* 1. 保存上一帧 */
+//	Remote_Control.Second = Remote_Control.First;
+//	/* 2. 解析当前按键 */
+//	Key_Parse(recv_pack.Key, &Remote_Control.First);
+//	
+////	Remote_Control.Ex = recv_pack.rocker[1] / 1977.0f *MAX_ROBOT_VEL;
+////	Remote_Control.Ey = recv_pack.rocker[0] / 1798.0f *MAX_ROBOT_VEL;
+////	Remote_Control.Eomega = recv_pack.rocker[2] / 1847.0f * MAX_ROBOT_OMEGA;
+//	Remote_Control.Ex = recv_pack.rocker[1] / 1647.0f *MAX_ROBOT_VEL;
+//	Remote_Control.Ey = recv_pack.rocker[0] / 1647.0f *MAX_ROBOT_VEL;
+//	Remote_Control.Eomega = recv_pack.rocker[2] / 1647.0f * MAX_ROBOT_OMEGA;
+//}
 
 
 //遥控器滤波降噪 
@@ -237,7 +236,7 @@ void Remote(void *pvParameters)
 	{
 		if(MODE == REMOTE)
 		{			
-			Remote_Analysis();
+//			Remote_Analysis();
 			Vx = Remote_Control.Ex;
 			Vy = -Remote_Control.Ey;
 //			Wz = Remote_Control.Eomega;
@@ -293,20 +292,20 @@ float Wz_cmd = Remote_Control.Eomega;
       VESC_SetCurrent(&motor2.steering, motor2.PID.pid_out);
 	    VESC_SetCurrent(&motor3.steering, motor3.PID.pid_out);  
 			
-			if(KEY_RISING_EDGE(Remote_Control.Second, Remote_Control.First, Right_Key_Down))
-			{
-				flag_two = 1;
-			}
-		if(recv_pack.rocker[0] == 0 && recv_pack.rocker[1] == 0 && recv_pack.rocker[2] == 0 )
-//				if(abs(recv_pack.rocker[3]>1500))第二判断法
-			{
-	    Remote_Control.Ex = 0;
-      Remote_Control.Ey = 0;
-      Remote_Control.Eomega = 0;
-			
-      memset(&Remote_Control.First, 0, sizeof(Remote_Control.First));
-			
-		 	}
+//			if(KEY_RISING_EDGE(Remote_Control.Second, Remote_Control.First, Right_Key_Down))
+//			{
+//				flag_two = 1;
+//			}
+//		if(recv_pack.rocker[0] == 0 && recv_pack.rocker[1] == 0 && recv_pack.rocker[2] == 0 )
+////				if(abs(recv_pack.rocker[3]>1500))第二判断法
+//			{
+//	    Remote_Control.Ex = 0;
+//      Remote_Control.Ey = 0;
+//      Remote_Control.Eomega = 0;
+//			
+//      memset(&Remote_Control.First, 0, sizeof(Remote_Control.First));
+//			
+//		 	}
 		}
 		if(MODE == STP || MODE == STOP )
 		{
@@ -364,13 +363,14 @@ void Remote_JY61(void *pvParameters){
 
 TaskHandle_t Remote_Go_Handle;
 void Remote_Go(void *pvParameters){
-	  TickType_t last_wake_time = xTaskGetTickCount();
+	
+//  TickType_t last_wake_time = xTaskGetTickCount();
 	
    for(;;)
 	{
 		Remote_Analysis();
-
-	 vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(2));
+		
+//	 vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(2));
 	 }
 }
 void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef *hcan)
